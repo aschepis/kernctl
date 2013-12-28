@@ -24,9 +24,9 @@ const (
 )
 
 type Conn struct {
-	CtlId uint32
+	CtlId  uint32
 	UnitId uint32
-	fd int
+	fd     int
 }
 
 type Message interface {
@@ -48,7 +48,7 @@ func (conn *Conn) socket() (int, error) {
 
 // Connect will create a connection to the control socket for the
 // kernel extension named in CtlName
-func (conn *Conn) Connect() (error) {
+func (conn *Conn) Connect() error {
 	_, errno := conn.connect()
 	var err error = nil
 	if errno != 0 {
@@ -73,20 +73,32 @@ func (conn *Conn) SendCommand(msg Message) {
 	fmt.Println("wrote ", n, " bytes. err: ", err)
 }
 
-func (conn *Conn) Select() error {
+func (conn *Conn) Select(readBuf []byte) (error, int) {
 	fd, _ := conn.socket()
+
 	timeout := &syscall.Timeval{
-		Sec: 1,
+		Sec:  1,
 		Usec: 0,
 	}
-	var r, w, e syscall.FdSet
 
-	n := syscall.Select(fd, &r, &w, &e, timeout)
-	fmt.Println("select:", n, fd, r, w, e)
-	return nil
+	r := &syscall.FdSet{}
+	FD_ZERO(r)
+	FD_SET(r, fd)
+
+	syscall.Select(fd+1, r, nil, nil, timeout)
+	bytesRead := 0
+	if FD_ISSET(r, fd) {
+		n, _, err := syscall.Recvfrom(fd, readBuf, 0)
+		bytesRead = n
+
+		if err != nil {
+			fmt.Println(err)
+		}
+	}
+	return nil, bytesRead
 }
 
-func  (conn *Conn) createSockAddr() C.struct_sockaddr_ctl {
+func (conn *Conn) createSockAddr() C.struct_sockaddr_ctl {
 	var sockaddr C.struct_sockaddr_ctl
 	sockaddr.sc_len = C.u_char(unsafe.Sizeof(C.struct_sockaddr_ctl{}))
 	sockaddr.sc_family = C.u_char(PF_SYSTEM)
@@ -131,4 +143,19 @@ func GetCtlId(fd int, CtlName string) (uint32, error) {
 		uintptr(unsafe.Pointer(&info)))
 	fmt.Println("CtlId: ", uint32(info.ctl_id))
 	return uint32(info.ctl_id), nil
+}
+
+// stolen from https://github.com/pebbe/zmq2
+func FD_SET(p *syscall.FdSet, i int) {
+	p.Bits[i/64] |= 1 << uint(i) % 64
+}
+
+func FD_ISSET(p *syscall.FdSet, i int) bool {
+	return (p.Bits[i/64] & (1 << uint(i) % 64)) != 0
+}
+
+func FD_ZERO(p *syscall.FdSet) {
+	for i := range p.Bits {
+		p.Bits[i] = 0
+	}
 }
