@@ -36,7 +36,6 @@ type Message interface {
 func (conn *Conn) socket() (int, error) {
 	if conn.fd == 0 {
 		fd, err := syscall.Socket(PF_SYSTEM, syscall.SOCK_DGRAM, SYSPROTO_CONTROL)
-		fmt.Println("fd: ", fd)
 		if err != nil {
 			return 0, err
 		}
@@ -68,12 +67,10 @@ func (conn *Conn) Close() {
 
 func (conn *Conn) SendCommand(msg Message) {
 	fd, err := conn.socket()
-	fmt.Println("sending ", msg, "(", msg.Bytes(), ") to ", fd)
 	n, err := syscall.Write(fd, msg.Bytes()[:])
-	fmt.Println("wrote ", n, " bytes. err: ", err)
 }
 
-func (conn *Conn) Select(readBuf []byte) (error, int) {
+func (conn *Conn) Select(bufSize int) (error, []byte) {
 	fd, _ := conn.socket()
 
 	timeout := &syscall.Timeval{
@@ -86,16 +83,24 @@ func (conn *Conn) Select(readBuf []byte) (error, int) {
 	FD_SET(r, fd)
 
 	syscall.Select(fd+1, r, nil, nil, timeout)
+
 	bytesRead := 0
+	readBuf := make([]byte, bufSize)
+
 	if FD_ISSET(r, fd) {
 		n, _, err := syscall.Recvfrom(fd, readBuf, 0)
 		bytesRead = n
 
 		if err != nil {
-			fmt.Println(err)
+			return err, nil
 		}
 	}
-	return nil, bytesRead
+
+	if bytesRead > 0 {
+		return nil, readBuf[0:bytesRead]
+	} else {
+		return nil, nil
+	}
 }
 
 func (conn *Conn) createSockAddr() C.struct_sockaddr_ctl {
@@ -112,8 +117,9 @@ func (conn *Conn) connect() (ret int64, err syscall.Errno) {
 	sockLen := 32
 	sa := conn.createSockAddr()
 	fd, _ := conn.socket()
-	r1, r2, e := syscall.Syscall(syscall.SYS_CONNECT, uintptr(fd), uintptr(unsafe.Pointer(&sa)), uintptr(sockLen))
-	fmt.Println("connect response: ", r1, " :", r2, " e:", e)
+	r1, r2, e := syscall.Syscall(syscall.SYS_CONNECT, uintptr(fd),
+		uintptr(unsafe.Pointer(&sa)),
+		uintptr(sockLen))
 	return int64(r1), e
 }
 
@@ -141,7 +147,6 @@ func GetCtlId(fd int, CtlName string) (uint32, error) {
 		C.size_t(utf8.RuneCountInString(CtlName)))
 	syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), CTLIOCGINFO,
 		uintptr(unsafe.Pointer(&info)))
-	fmt.Println("CtlId: ", uint32(info.ctl_id))
 	return uint32(info.ctl_id), nil
 }
 
