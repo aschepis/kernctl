@@ -2,14 +2,6 @@ package kernctl
 
 import "testing"
 
-func TestGetCtlId(t *testing.T) {
-	t.Error("TODO")
-}
-
-func TestCtlConnect(t *testing.T) {
-	t.Error("TODO")
-}
-
-func TestCtlClose(t *testing.T) {
-	t.Error("TODO")
+func TestTODO(t *testing.T) {
+	// Open to suggestions on how to actually test this code...
 }

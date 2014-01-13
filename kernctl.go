@@ -66,8 +66,8 @@ func (conn *Conn) Close() {
 }
 
 func (conn *Conn) SendCommand(msg Message) {
-	fd, err := conn.socket()
-	n, err := syscall.Write(fd, msg.Bytes()[:])
+	fd, _ := conn.socket()
+	syscall.Write(fd, msg.Bytes()[:])
 }
 
 func (conn *Conn) Select(bufSize int) (error, []byte) {
@@ -117,7 +117,7 @@ func (conn *Conn) connect() (ret int64, err syscall.Errno) {
 	sockLen := 32
 	sa := conn.createSockAddr()
 	fd, _ := conn.socket()
-	r1, r2, e := syscall.Syscall(syscall.SYS_CONNECT, uintptr(fd),
+	r1, _, e := syscall.Syscall(syscall.SYS_CONNECT, uintptr(fd),
 		uintptr(unsafe.Pointer(&sa)),
 		uintptr(sockLen))
 	return int64(r1), e
